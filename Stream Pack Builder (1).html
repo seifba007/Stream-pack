@@ -1,0 +1,453 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Stream Pack Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+  
+/* Layout: broadcast "control deck" — price rack on the left, sticky live total panel on the right; stacks with a bottom bar on phones */
+:root {
+  --bg: #0d0b16;
+  --panel: #161325;
+  --panel-2: #1e1a32;
+  --line: #2c2746;
+  --fg: #ece9f7;
+  --muted: #9a94b8;
+  --live: #ff3d5a;      /* on-air red */
+  --signal: #43e0d0;    /* animated / motion */
+  --amber: #ffb547;
+  --display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  background-image:
+    radial-gradient(900px 400px at 85% -10%, rgba(255,61,90,.13), transparent 60%),
+    radial-gradient(700px 360px at -10% 20%, rgba(67,224,208,.08), transparent 60%);
+  background-attachment: fixed;
+  color: var(--fg);
+  font: 400 16px/1.5 var(--body);
+  min-height: 100%;
+}
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-block: 32px 120px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+header { display: grid; gap: 10px; margin-bottom: 28px; }
+.onair {
+  display: inline-flex; align-items: center; gap: 8px; width: fit-content;
+  font: 600 12px/1 var(--display); letter-spacing: .18em; text-transform: uppercase;
+  color: var(--live); border: 1px solid rgba(255,61,90,.45); padding: 6px 10px; border-radius: 4px;
+}
+.toprow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.ig {
+  display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--fg);
+  font: 600 14px/1 var(--display); letter-spacing: .04em; padding: 8px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--panel); transition: border-color .15s;
+}
+.ig:hover, .ig:focus-visible { border-color: var(--live); }
+.ig svg { flex: none; }
+.btn.ig-btn { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; background: linear-gradient(90deg, #f58529, #dd2a7b 50%, #8134af); }
+.onair i { width: 8px; height: 8px; border-radius: 50%; background: var(--live); box-shadow: 0 0 10px var(--live); animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+h1 {
+  font: 700 clamp(32px, 6vw, 56px)/1.02 var(--display); margin: 0; letter-spacing: -.01em;
+  text-wrap: balance;
+}
+h1 span { color: var(--live); }
+.lede { color: var(--muted); margin: 0; max-width: 60ch; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; align-items: center; }
+.presets .lbl { font: 600 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.chip {
+  font: 600 14px/1 var(--display); color: var(--fg); background: var(--panel); border: 1px solid var(--line);
+  padding: 9px 14px; border-radius: 999px; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.chip:hover { border-color: var(--signal); }
+.chip.ghost { color: var(--muted); }
+.chip.active { border-color: var(--live); background: rgba(255,61,90,.12); }
+.off { font: 700 11px/1 var(--mono); font-style: normal; color: #fff; background: var(--live); padding: 3px 5px; border-radius: 4px; margin-left: 6px; vertical-align: 1px; }
+.was { font: 500 15px/1 var(--mono); color: var(--muted); text-decoration: line-through; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.promo { display: flex; justify-content: space-between; gap: 10px; margin: 0 20px 12px; padding: 10px 12px; border-radius: 8px; font: 600 14px/1.3 var(--display); color: var(--live); background: rgba(255,61,90,.1); border: 1px dashed rgba(255,61,90,.55); }
+.promo span:last-child { font-family: var(--mono); white-space: nowrap; }
+.packinfo { font-size: 13px; color: var(--muted); margin: -8px 0 18px; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+
+.rack { display: grid; gap: 10px; }
+.rack-head {
+  display: grid; grid-template-columns: 1fr 240px; gap: 12px; padding: 0 16px;
+  font: 600 11px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+}
+.rack-head span:last-child { text-align: right; }
+
+.item {
+  display: grid; grid-template-columns: auto minmax(0,1fr) 240px; gap: 14px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+  transition: border-color .15s, background .15s, transform .15s;
+  position: relative;
+}
+.item.on { border-color: rgba(255,61,90,.6); background: linear-gradient(90deg, rgba(255,61,90,.09), var(--panel) 55%); }
+.check { position: relative; width: 26px; height: 26px; }
+.check input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.check span {
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 6px;
+  border: 2px solid var(--line); background: var(--bg); transition: all .15s; pointer-events: none;
+}
+.check input:checked + span { background: var(--live); border-color: var(--live); }
+.check span svg { opacity: 0; transition: opacity .15s; }
+.check input:checked + span svg { opacity: 1; }
+.check input:focus-visible + span { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+.name { min-width: 0; }
+.name label { font: 600 18px/1.2 var(--display); cursor: pointer; display: block; }
+.name small { color: var(--muted); font-size: 13px; display: block; margin-top: 2px; }
+
+.opts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.opt { position: relative; }
+.opt input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.opt div {
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 8px; text-align: center; background: var(--bg);
+  transition: all .15s; pointer-events: none;
+}
+.opt b { display: block; font: 600 10px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.opt em { font: 500 13px/1 var(--mono); font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.opt input:checked + div { border-color: var(--fg); background: var(--panel-2); }
+.opt input:checked + div b { color: var(--fg); }
+.opt.anim input:checked + div { border-color: var(--signal); box-shadow: inset 0 0 0 1px var(--signal); }
+.opt.anim input:checked + div b { color: var(--signal); }
+.opt input:focus-visible + div { outline: 2px solid var(--signal); outline-offset: 2px; }
+.opt input:disabled + div { opacity: .35; }
+.opt input:disabled { cursor: not-allowed; }
+.opt.quote em { font-family: var(--body); font-weight: 600; color: var(--amber); }
+
+.qty { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; }
+.qty button {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  font: 700 16px/1 var(--mono); cursor: pointer;
+}
+.qty button:hover { border-color: var(--signal); }
+.qty output { font: 700 15px/1 var(--mono); min-width: 2ch; text-align: center; }
+.qty span { color: var(--muted); font-size: 13px; }
+
+/* Total panel */
+.total {
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+}
+.total-top { padding: 20px 20px 18px; border-bottom: 1px solid var(--line); background: linear-gradient(160deg, rgba(255,61,90,.16), transparent 70%); }
+.total-top h2 { margin: 0 0 12px; font: 600 12px/1 var(--display); letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.price { font: 700 clamp(30px, 4vw, 38px)/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.price .dt { font: 600 16px/1 var(--display); color: var(--live); margin-left: 6px; letter-spacing: .06em; }
+.price .sep { color: var(--muted); margin: 0 4px; }
+.sub { color: var(--muted); font-size: 14px; margin-top: 8px; }
+.sub strong { color: var(--fg); font-weight: 600; }
+.lines { list-style: none; margin: 0; padding: 12px 20px; display: grid; gap: 8px; max-height: 320px; overflow: auto; }
+.lines li { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.lines li span:first-child { min-width: 0; }
+.lines li span:last-child { font: 500 13px/1.5 var(--mono); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tag { font: 600 10px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; padding: 3px 5px; border-radius: 3px; margin-left: 6px; vertical-align: 2px; }
+.tag.s { color: var(--fg); border: 1px solid var(--line); }
+.tag.a { color: var(--signal); border: 1px solid rgba(67,224,208,.5); }
+.empty { color: var(--muted); font-size: 14px; padding: 4px 0; }
+.note { margin: 0 20px 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px; color: var(--amber); background: rgba(255,181,71,.08); border: 1px solid rgba(255,181,71,.3); }
+.actions { padding: 14px 20px 20px; display: grid; gap: 8px; border-top: 1px solid var(--line); }
+.btn {
+  font: 700 15px/1 var(--display); letter-spacing: .06em; text-transform: uppercase;
+  padding: 14px; border-radius: 8px; border: 0; cursor: pointer; background: var(--live); color: #fff;
+  transition: filter .15s, transform .1s;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.alt { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.hint { font-size: 12px; color: var(--muted); text-align: center; min-height: 1.2em; }
+textarea.fallback { width: 100%; min-height: 120px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; font: 12px/1.4 var(--mono); padding: 8px; }
+
+.inl { color: var(--fg); }
+.foot { margin-top: 26px; color: var(--muted); font-size: 13px; max-width: 70ch; }
+
+/* Mobile bottom bar */
+.bar { display: none; }
+
+@media (max-width: 880px) {
+  .grid { grid-template-columns: 1fr; }
+  .total { position: static; }
+  .bar {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    justify-content: space-between; align-items: center; gap: 12px;
+    padding-top: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: rgba(22,19,37,.96); border-top: 1px solid var(--line); backdrop-filter: blur(8px);
+  }
+  .bar .p { font: 700 20px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .bar .p small { font: 600 12px/1 var(--display); color: var(--live); margin-left: 4px; }
+  .bar .c { font-size: 12px; color: var(--muted); display: block; margin-top: 4px; }
+  .bar a { font: 700 13px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: #fff; background: var(--live); padding: 12px 14px; border-radius: 8px; text-decoration: none; }
+}
+@media (max-width: 600px) {
+  .rack-head { display: none; }
+  .item { grid-template-columns: auto minmax(0,1fr); }
+  .opts { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="toprow">
+      <div class="onair"><i></i>Stream Pack Service</div>
+      <a class="ig" href="https://www.instagram.com/wala.ps/" target="_blank" rel="noopener">IGICON<span>@wala.ps</span></a>
+    </div>
+    <h1>Build your <span>stream pack</span></h1>
+    <p class="lede">Coche les éléments qui t'intéressent, choisis Static ou Animated, et le total s'affiche directement. Les prix sont en dinars tunisiens, du plus simple au plus détaillé.</p>
+  </header>
+
+  <div class="presets" aria-label="Packs rapides">
+    <span class="lbl">Packs rapides</span>
+    <button class="chip" type="button" data-preset="starter">Starter <em class="off">-5%</em></button>
+    <button class="chip" type="button" data-preset="pro">Pro Animated <em class="off">-10%</em></button>
+    <button class="chip" type="button" data-preset="full">Full Pack <em class="off">-15%</em></button>
+    <button class="chip ghost" type="button" data-preset="clear">Tout effacer</button>
+  </div>
+  <p class="packinfo">Promo: coche tous les éléments d'un pack (même type Static/Animated) et la remise s'applique automatiquement.</p>
+
+  <div class="grid">
+    <section class="rack" aria-label="Liste des prix">
+      <div class="rack-head"><span>Élément</span><span>Static · Animated</span></div>
+      <div id="items"></div>
+    </section>
+
+    <aside class="total" id="order" aria-live="polite">
+      <div class="total-top">
+        <h2>Total estimé</h2>
+        <div class="was" id="was" hidden></div>
+        <div class="price" id="price">0<span class="dt">DT</span></div>
+        <div class="sub" id="sub">Aucun élément sélectionné</div>
+      </div>
+      <ul class="lines" id="lines"></ul>
+      <div class="promo" id="promo" hidden><span id="promoName"></span><span id="promoAmt"></span></div>
+      <div class="note" id="note" hidden></div>
+      <div class="actions">
+        <button class="btn" type="button" id="copy">Copier la commande</button>
+        <a class="btn ig-btn" id="igSend" href="https://ig.me/m/wala.ps" target="_blank" rel="noopener">IGICON Envoyer sur Instagram</a>
+        <div class="hint" id="hint">Le bouton copie ta commande et ouvre la conversation Instagram : il ne reste qu'à coller et envoyer.</div>
+        <textarea class="fallback" id="fallback" hidden readonly aria-label="Résumé de la commande"></textarea>
+      </div>
+    </aside>
+  </div>
+
+  <p class="foot">Le prix final dépend de la complexité du design (couleurs, détails, nombre de révisions). Fourchette affichée: prix min → prix max. Les éléments « sur demande » sont chiffrés après discussion. Pour commander ou poser une question: Instagram <a class="inl" href="https://www.instagram.com/wala.ps/" target="_blank" rel="noopener">@wala.ps</a>.</p>
+</div>
+
+<div class="bar" aria-hidden="true">
+  <div><span class="p" id="barPrice">0<small>DT</small></span><span class="c" id="barCount">0 élément</span></div>
+  <a href="#order">Voir</a>
+</div>
+
+<script>
+const IG = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>';
+document.querySelectorAll(".ig, .ig-btn").forEach(a => a.innerHTML = a.innerHTML.replace("IGICON", IG));
+
+const ITEMS = [
+  { id: "starting", name: "Starting Soon", desc: "Écran d'attente avant le live", s: [25, 30], a: [60, 80] },
+  { id: "brb", name: "BRB Screen", desc: "Pause « Be Right Back »", s: [20, 25], a: [45, 65] },
+  { id: "ending", name: "Ending Screen", desc: "Écran de fin de stream", s: [20, 25], a: [45, 65] },
+  { id: "overlay", name: "Gameplay Overlay", desc: "Habillage pendant le jeu", s: [35, 55], a: [85, 125] },
+  { id: "webcam", name: "Webcam Frame", desc: "Cadre pour la caméra", s: [15, 20], a: [35, 55] },
+  { id: "alert", name: "Alert", desc: "Prix par alerte (follow, sub, donation…)", s: [12, 18], a: [30, 45], qty: true },
+  { id: "stinger", name: "Stinger Transition", desc: "Transition animée entre les scènes", s: null, a: [75, 115] },
+  { id: "logo", name: "Logo Design", desc: "Logo de la chaîne", s: [50, 90], a: [120, 180] },
+  { id: "panels", name: "Twitch Panels (6)", desc: "6 panneaux pour la page About", s: [30, 45], a: "quote" },
+  { id: "name", name: "Animated Name / Tag", desc: "Nom ou pseudo stylisé", s: [20, 25], a: [40, 60] },
+];
+
+const PRESETS = {
+  starter: { starting: "s", brb: "s", ending: "s", webcam: "s" },
+  pro: { starting: "a", brb: "a", ending: "a", overlay: "a", webcam: "a", alert: "a", stinger: "a" },
+  full: { starting: "a", brb: "a", ending: "a", overlay: "a", webcam: "a", alert: "a", stinger: "a", logo: "a", panels: "s", name: "a" },
+};
+// Promo per pack; the biggest pack fully included in the selection wins
+const PROMOS = [
+  { id: "full", name: "Full Pack", pct: 15 },
+  { id: "pro", name: "Pro Animated", pct: 10 },
+  { id: "starter", name: "Starter", pct: 5 },
+];
+function activePromo() {
+  return PROMOS.find(p => Object.entries(PRESETS[p.id]).every(([id, t]) => state[id].on && state[id].type === t)) || null;
+}
+
+// state: id -> { on, type: 's'|'a', qty }
+const state = {};
+ITEMS.forEach(it => state[it.id] = { on: false, type: it.s ? "s" : "a", qty: 1 });
+
+const fmt = ([lo, hi]) => `${lo}–${hi}`;
+const check = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function render() {
+  const box = document.getElementById("items");
+  box.innerHTML = ITEMS.map(it => {
+    const st = state[it.id];
+    const sOpt = it.s
+      ? `<label class="opt"><input type="radio" name="t-${it.id}" id="t-${it.id}-s" value="s" ${st.type === "s" ? "checked" : ""}><div><b>Static</b><em>${fmt(it.s)} DT</em></div></label>`
+      : `<label class="opt"><input type="radio" name="t-${it.id}" id="t-${it.id}-s" value="s" disabled><div><b>Static</b><em>—</em></div></label>`;
+    const aOpt = it.a === "quote"
+      ? `<label class="opt anim quote"><input type="radio" name="t-${it.id}" id="t-${it.id}-a" value="a" ${st.type === "a" ? "checked" : ""}><div><b>Animated</b><em>Sur demande</em></div></label>`
+      : `<label class="opt anim"><input type="radio" name="t-${it.id}" id="t-${it.id}-a" value="a" ${st.type === "a" ? "checked" : ""}><div><b>Animated</b><em>${fmt(it.a)} DT</em></div></label>`;
+    const qty = it.qty ? `<div class="qty"><button type="button" data-q="-1" aria-label="Moins d'alertes">−</button><output id="q-${it.id}">${st.qty}</output><button type="button" data-q="1" aria-label="Plus d'alertes">+</button><span>alerte(s)</span></div>` : "";
+    return `<div class="item ${st.on ? "on" : ""}" data-id="${it.id}">
+      <span class="check"><input type="checkbox" id="c-${it.id}" ${st.on ? "checked" : ""}><span>${check}</span></span>
+      <div class="name"><label for="c-${it.id}">${it.name}</label><small>${it.desc}</small>${qty}</div>
+      <div class="opts" role="radiogroup" aria-label="Type pour ${it.name}">${sOpt}${aOpt}</div>
+    </div>`;
+  }).join("");
+  update();
+}
+
+function compute() {
+  let lo = 0, hi = 0, count = 0, quotes = [];
+  const lines = [];
+  ITEMS.forEach(it => {
+    const st = state[it.id];
+    if (!st.on) return;
+    count += it.qty ? st.qty : 1;
+    const range = st.type === "s" ? it.s : it.a;
+    const label = it.qty && st.qty > 1 ? `${it.name} ×${st.qty}` : it.name;
+    if (range === "quote") {
+      quotes.push(it.name);
+      lines.push({ label, type: st.type, price: "Sur demande" });
+      return;
+    }
+    const q = it.qty ? st.qty : 1;
+    lo += range[0] * q; hi += range[1] * q;
+    lines.push({ label, type: st.type, price: `${range[0] * q}–${range[1] * q} DT` });
+  });
+  const promo = activePromo();
+  const rawLo = lo, rawHi = hi;
+  if (promo) { lo = Math.round(lo * (1 - promo.pct / 100)); hi = Math.round(hi * (1 - promo.pct / 100)); }
+  return { lo, hi, rawLo, rawHi, promo, count, quotes, lines };
+}
+
+function update() {
+  const { lo, hi, rawLo, rawHi, promo, count, quotes, lines } = compute();
+  const was = document.getElementById("was");
+  was.hidden = !promo;
+  if (promo) was.textContent = `${rawLo}–${rawHi} DT`;
+  document.getElementById("promo").hidden = !promo;
+  if (promo) {
+    document.getElementById("promoName").textContent = `Promo ${promo.name} -${promo.pct}%`;
+    document.getElementById("promoAmt").textContent = `-${rawLo - lo}–${rawHi - hi} DT`;
+  }
+  document.querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("active", !!promo && b.dataset.preset === promo.id));
+  const price = document.getElementById("price");
+  price.innerHTML = count && hi
+    ? `${lo}<span class="sep">–</span>${hi}<span class="dt">DT</span>`
+    : `0<span class="dt">DT</span>`;
+  document.getElementById("sub").innerHTML = count
+    ? `<strong>${count}</strong> élément${count > 1 ? "s" : ""} · moyenne ≈ <strong>${Math.round((lo + hi) / 2)} DT</strong>`
+    : "Aucun élément sélectionné";
+  document.getElementById("lines").innerHTML = lines.length
+    ? lines.map(l => `<li><span>${l.label}<span class="tag ${l.type}">${l.type === "s" ? "Static" : "Anim"}</span></span><span>${l.price}</span></li>`).join("")
+    : `<li class="empty">Coche des éléments pour voir le détail.</li>`;
+  const note = document.getElementById("note");
+  note.hidden = !quotes.length;
+  if (quotes.length) note.textContent = `${quotes.join(", ")} en Animated: prix sur demande, non inclus dans le total.`;
+  document.getElementById("copy").disabled = !count;
+  document.getElementById("barPrice").innerHTML = (count && hi ? `${lo}–${hi}` : "0") + "<small>DT</small>";
+  document.getElementById("barCount").textContent = `${count} élément${count > 1 ? "s" : ""}`;
+  ITEMS.forEach(it => {
+    const el = document.querySelector(`.item[data-id="${it.id}"]`);
+    if (el) el.classList.toggle("on", state[it.id].on);
+  });
+}
+
+document.getElementById("items").addEventListener("change", e => {
+  const row = e.target.closest(".item"); if (!row) return;
+  const st = state[row.dataset.id];
+  if (e.target.type === "checkbox") st.on = e.target.checked;
+  if (e.target.type === "radio") {
+    st.type = e.target.value;
+    if (!st.on) { st.on = true; row.querySelector('input[type="checkbox"]').checked = true; }
+  }
+  update();
+});
+
+document.getElementById("items").addEventListener("click", e => {
+  const b = e.target.closest("[data-q]"); if (!b) return;
+  const row = b.closest(".item"); const st = state[row.dataset.id];
+  st.qty = Math.max(1, Math.min(20, st.qty + Number(b.dataset.q)));
+  row.querySelector("output").textContent = st.qty;
+  if (!st.on) { st.on = true; row.querySelector('input[type="checkbox"]').checked = true; }
+  update();
+});
+
+document.querySelectorAll("[data-preset]").forEach(btn => btn.addEventListener("click", () => {
+  const p = PRESETS[btn.dataset.preset] || {};
+  ITEMS.forEach(it => {
+    const st = state[it.id];
+    st.on = it.id in p;
+    if (st.on) st.type = p[it.id];
+    if (!st.on) st.qty = 1;
+  });
+  if (btn.dataset.preset === "pro" || btn.dataset.preset === "full") state.alert.qty = 3;
+  render();
+}));
+
+function orderText() {
+  const { lo, hi, rawLo, rawHi, promo, lines, quotes } = compute();
+  return [
+    "Salam! Commande Stream Pack:",
+    ...lines.map(l => `• ${l.label} (${l.type === "s" ? "Static" : "Animated"}) : ${l.price}`),
+    promo ? `Promo ${promo.name} -${promo.pct}% (avant: ${rawLo}–${rawHi} DT)` : "",
+    `Total estimé: ${lo}–${hi} DT`,
+    quotes.length ? `(+ ${quotes.join(", ")} sur demande)` : "",
+  ].filter(Boolean).join("\n");
+}
+
+document.getElementById("igSend").addEventListener("click", e => {
+  const hint = document.getElementById("hint");
+  if (!compute().count) { e.preventDefault(); hint.textContent = "Coche d'abord au moins un élément."; return; }
+  // Instagram can't prefill a DM, so copy the order first; the link still opens the chat
+  try {
+    navigator.clipboard.writeText(orderText()).then(
+      () => { hint.textContent = "Commande copiée ✓ Colle-la dans la conversation et envoie."; },
+      () => { hint.textContent = "Copie automatique bloquée : utilise « Copier la commande »."; }
+    );
+  } catch (err) { hint.textContent = "Copie automatique bloquée : utilise « Copier la commande »."; }
+});
+
+document.getElementById("copy").addEventListener("click", () => {
+  const text = orderText();
+  const hint = document.getElementById("hint");
+  const fb = document.getElementById("fallback");
+  const showFallback = () => {
+    fb.value = text; fb.hidden = false; fb.focus(); fb.select();
+    hint.textContent = "Sélectionne le texte et copie-le.";
+  };
+  try {
+    navigator.clipboard.writeText(text).then(() => {
+      hint.textContent = "Commande copiée ✓ Colle-la en DM à @wala.ps";
+      fb.hidden = true;
+    }, showFallback);
+  } catch (err) { showFallback(); }
+});
+
+// Opens on a sample pack so the total is visible right away
+Object.assign(state.starting, { on: true, type: "a" });
+Object.assign(state.overlay, { on: true, type: "s" });
+Object.assign(state.webcam, { on: true, type: "s" });
+render();
+</script>
+
+</body></html>
